@@ -1,1 +1,4 @@
-../homed/homed
+#!/usr/bin/env node
+
+require('../homed/node_modules/iced-coffee-script')
+require('../homed/homed.iced')

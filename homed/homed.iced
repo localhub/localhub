@@ -73,7 +73,7 @@ class Homed
 
 args = process.argv[2..]
 if not args.length
-	process.stderr.write "usage: homed job_directory"
+	process.stderr.write "usage: homed job_directory\n"
 	process.exit -1
 
 homed = new Homed args[0]

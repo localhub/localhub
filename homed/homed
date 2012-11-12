@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-
-DIR="$(dirname "$(python -c "import os.path, sys; print(os.path.realpath(sys.argv[1]))" "${BASH_SOURCE[0]}")")" &&
-"$DIR"/node_modules/iced-coffee-script/bin/coffee "$DIR"/homed.iced "$@"
-
