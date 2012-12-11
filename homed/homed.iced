@@ -4,6 +4,7 @@ net = require 'net'
 readline = require 'readline'
 events = require 'events'
 path = require 'path'
+child_process = require 'child_process'
 
 class Homed
 	constructor: (@jobsDir) ->
@@ -28,10 +29,24 @@ class Homed
 	shutDown: () ->
 		@controlServer.close()
 
-	loadJobDirectory: (jobDir) ->
-		console.log "TODO: load the job in " + jobDir
-		@jobs[jobDir] = {}
-		console.log fs.statSync path.join jobDir, run
+	loadJobDirectory: (id, dir) ->
+		if id of @jobs
+			throw new Exception "Shit, already had a job named " + id
+		runfile = path.join dir, 'run'
+		await fs.exists runfile, defer(exists)
+		if not exists
+			@emit 'warning', "Job at " + dir + " doesn’t have a run file, ignoring"
+			return
+		@jobs[id] =
+			dir: dir
+			child: child = child_process.spawn(
+				runfile,
+				[],
+				{ stdio: ['ignore', 1, 2] }
+			)
+		console.log "Started " + id + " (pid " + child.pid + ")"
+
+
 
 	unloadJobDirectory: (jobDir) ->
 		console.log "TODO: unload the job in " + jobDir
@@ -48,7 +63,7 @@ class Homed
 
 		for job in jobDirectories
 			if !(job of @jobs)
-				@loadJobDirectory path.join @jobsDir, job
+				@loadJobDirectory job, path.join @jobsDir, job
 			delete goneJobs[job]
 
 		@unloadJobDirectory path.join @jobsDir, job for job in Object.keys goneJobs
@@ -57,18 +72,34 @@ class Homed
 
 
 	onConnection: (sock) ->
+		new HomedClient @, sock
+
+class HomedClient
+	constructor: (@homed, @sock) ->
 		sock.setEncoding 'utf-8'
 		i = readline.createInterface sock, sock
-		i.on 'line', (line) ->
+		i.on 'line', (line) =>
 			try
 				obj = JSON.parse line
 			catch e
 				console.log "Couldn’t parse message, closing connection with this client"
 				sock.destroy()
-			if obj.command == "list"
-				sock.write JSON.stringify({ command: "list", "jobs": ["foo", "bar", "baz"] })
-				sock.write '\n'
+			@recv obj
 
+	send: (msg) ->
+		@sock.write JSON.stringify(msg)
+		@sock.write '\n'
+
+	recv: (msg) ->
+		method = 'cmd_' + (msg.command || '')
+		if not method of @ then method = 'cmd_unknown'
+		@[method] msg
+	
+	cmd_list: (msg) ->
+		@send {
+			command: "list",
+			"jobs": @homed.jobs
+		}
 # - - -
 
 args = process.argv[2..]
