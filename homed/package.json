@@ -1,5 +1,5 @@
 {
-	"name": "home",
+	"name": "homed",
 	"version": "0.0.1",
 	"dependencies": {
 		"iced-coffee-script": "1.3"

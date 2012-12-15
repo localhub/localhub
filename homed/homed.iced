@@ -18,7 +18,7 @@ class Homed
 		@syncJobs()
 		fs.watch @jobsDir, (event, filename) => @syncJobs()
 
-		@controlPath = '/tmp/home.' + process.getuid() + '.sock'
+		@controlPath = '/tmp/homed.' + process.getuid() + '.sock'
 		@controlServer = new net.Server
 
 		fs.unlinkSync @controlPath if fs.existsSync @controlPath

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import socket, os, sys, json
 
-class HomeClient(object):
+class HomedClient(object):
 	def __init__(self):
 		sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-		sock.connect('/tmp/home.{uid}.sock'.format(uid=os.getuid()))
+		sock.connect('/tmp/homed.{uid}.sock'.format(uid=os.getuid()))
 		self.connection = sock.makefile('rw')
 
 	def __sendCommand(self, command):
@@ -19,13 +19,13 @@ if __name__ == "__main__":
 	import argparse
 
 	commands = {
-		'list': HomeClient.listJobs
+		'list': HomedClient.listJobs
 	}
 
 
 	parser = argparse.ArgumentParser(
 		formatter_class=argparse.RawDescriptionHelpFormatter,
-		description="Interface to control home (https://github.com/Sidnicious/home)",
+		description="Interface to control homed (https://github.com/Sidnicious/homed)",
 		epilog="""
 commands:
   list: list jobs
@@ -35,7 +35,7 @@ commands:
 	args = parser.parse_args()
 
 	try:
-		client = HomeClient()
+		client = HomedClient()
 	except socket.error as e:
 		print("Couldn’t connect. Is homed running?", file=sys.stderr)
 		sys.exit(1)
