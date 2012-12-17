@@ -102,6 +102,7 @@ class HomedClient
 		}
 # - - -
 
+process.title = 'homed'
 args = process.argv[2..]
 if not args.length
 	process.stderr.write "usage: homed job_directory\n"
