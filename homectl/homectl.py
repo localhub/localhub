@@ -12,26 +12,28 @@ class HomedClient(object):
 		self.connection.write('\n')
 		self.connection.flush()
 		return json.loads(self.connection.readline())
-	def listJobs(self):
+
+	@classmethod
+	def commands(cls):
+		for name in cls.__dict__:
+			if name[:4] == 'cmd_':
+				yield (name[4:], getattr(cls, name).__doc__)
+
+	def cmd_list(self):
+		"List jobs"
 		return self.__sendCommand({ 'command': 'list' })["jobs"]
 
 if __name__ == "__main__":
 	import argparse
-
-	commands = {
-		'list': HomedClient.listJobs
-	}
-
 
 	parser = argparse.ArgumentParser(
 		formatter_class=argparse.RawDescriptionHelpFormatter,
 		description="Interface to control homed (https://github.com/Sidnicious/homed)",
 		epilog="""
 commands:
-  list: list jobs
-""",
+""" + '\n'.join('  {}: {}'.format(*cmd) for cmd in HomedClient.commands()),
 	)
-	parser.add_argument('command', metavar='command', choices=commands.keys())
+	parser.add_argument('command', metavar='command', choices=dict(HomedClient.commands()).keys())
 	args = parser.parse_args()
 
 	try:
@@ -39,4 +41,4 @@ commands:
 	except socket.error as e:
 		print("Couldn’t connect. Is homed running?", file=sys.stderr)
 		sys.exit(1)
-	print(commands[args.command](client))
+	print(getattr(client, 'cmd_' + args.command)())
