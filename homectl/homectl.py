@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
-import socket, os, sys, json, inspect
+import socket, os, sys, json, inspect, formatter
 
 class HomedClient(object):
 	def __init__(self):
 		sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 		sock.connect('/tmp/homed.{uid}.sock'.format(uid=os.getuid()))
 		self.connection = sock.makefile('rw')
+		self.recv = self.__recv()
 
-	def __sendCommand(self, command):
-		self.connection.write(json.dumps(command))
+	def __recv(self):
+		for msg in self.connection:
+			yield json.loads(msg)
+
+	def __send(self, msg):
+		self.connection.write(json.dumps(msg))
 		self.connection.write('\n')
 		self.connection.flush()
-		return json.loads(self.connection.readline())
+
+	def __until(self, message_type):
+		for message in self.recv:
+			yield message
+			if message["type"] == message_type: break
 
 	@classmethod
 	def commands(cls):
@@ -22,13 +31,17 @@ class HomedClient(object):
 
 	def cmd_list(self):
 		"List jobs"
-		for job_id, job in self.__sendCommand({ 'command': 'list' })["jobs"].items():
-			yield job_id
+		self.__send({ 'command': 'list' })
+		return self.__until("job_list")
 
 	def cmd_shutdown(self):
 		"Shut down homed"
-		yield self.__sendCommand({ 'command': 'shutdown' })
+		self.__send({ 'command': 'shutdown' })
+		return self.__until("bye")
 
+	def cmd_restart(self, job):
+		"Restart a job"
+		pass
 
 def usage():
 	return (
@@ -67,4 +80,4 @@ if __name__ == "__main__":
 	if method is None:
 		print(usage(), file=sys.stderr)
 		sys.exit(1)
-	for line in method(*args): print(line)
+	for line in method(*args): print(formatter.format(line))

@@ -1,3 +1,4 @@
+'use strict'
 fs = require 'fs'
 util = require 'util'
 net = require 'net'
@@ -6,15 +7,30 @@ events = require 'events'
 path = require 'path'
 child_process = require 'child_process'
 
+# Colors!
+red   = '\u001b[31m'
+reset = '\u001b[0m'
+
+timeout = (timeout, cb) ->
+	fired = false
+	setTimeout () ->
+		fired = true
+		cb true
+	return () ->
+		return if fired
+		fired = true
+		cb.apply undefined, [false].concat arguments
+
 class Homed
 	@Job: class Job
 		constructor: (@id, @dir, runfile) ->
-			@running = true
+			@started = true
+			@runningSince = new Date
 			@child = child_process.spawn(
 				runfile,
 				[],
 				{
-					# See @kill
+					# See @stop
 					detached: true,
 					stdio: ['ignore', 1, 2]
 				}
@@ -22,8 +38,9 @@ class Homed
 		stop: (cb) ->
 			# Fairly undocumented/unsupported: Kill the child's whole
 			# process group, we gave it one
-			console.log "Killing child id " + @id + " PID " + @child.pid
-			@running = false
+			console.log "Killing " + @id + " (pid " + @child.pid + ")"
+			@started = false
+			@runningSince = null
 			process.kill(-@child.pid)
 			@child.on 'exit', (code, signal) ->
 				clearTimeout killTimeout
@@ -32,6 +49,10 @@ class Homed
 			await killTimeout = setTimeout defer(), 10000
 			console.log('hard-killing', @child.pid)
 			process.kill(-@child.pid, 'SIGKILL')
+
+		onExit: (code, signal) ->
+			console.log "Hey, just FYI my job exited with " + code + " " + signal
+
 		toJSON: () -> { id: this.id }
 
 	constructor: (@jobsDir) ->
@@ -43,7 +64,7 @@ class Homed
 		@jobs = {}
 
 		@syncJobs()
-		fs.watch @jobsDir, (event, filename) => @syncJobs()
+		@watcher = fs.watch @jobsDir, (event, filename) => @syncJobs()
 
 		@controlPath = '/tmp/homed.' + process.getuid() + '.sock'
 		@controlServer = new net.Server
@@ -53,8 +74,31 @@ class Homed
 		@controlServer.listen @controlPath
 		@controlServer.on 'connection', @onConnection.bind this
 
-	shutDown: () ->
-		@controlServer.close()
+	shutDown: (cb) ->
+		if @controlServer
+			@controlServer.close()
+			@controlServer = null
+		if @watcher
+			@watcher.close()
+			@watcher = null
+		await
+			for job of @jobs
+				@jobs[job].stop defer()
+		@jobs = {}
+		if cb then cb()
+		null
+
+	loadJobDirectory: (id, dir) ->
+		if id of @jobs
+			throw new Exception "Shit, already had a job named " + id
+		runfile = path.join dir, 'run'
+		await fs.exists runfile, defer(exists)
+		if not exists
+			@emit 'warning', "Job at " + dir + " doesn’t have a run file, ignoring"
+			return
+		@jobs[id] = job = new Job(id, dir, runfile)
+		console.log "Started " + id + " (pid " + job.child.pid + ")"
+
 
 	loadJobDirectory: (id, dir) ->
 		if id of @jobs
@@ -72,7 +116,6 @@ class Homed
 				{ stdio: ['ignore', 1, 2] }
 			)
 		console.log "Started " + id + " (pid " + child.pid + ")"
-
 
 
 	unloadJobDirectory: (jobDir) ->
@@ -124,9 +167,17 @@ class HomedClient
 	
 	cmd_list: (msg) ->
 		@send {
-			command: "list",
+			type: "job_list",
 			"jobs": @homed.jobs
 		}
+	cmd_shutdown: (msg) ->
+		@send {
+			"type": "info",
+			"message": "Shutting down…"
+		}
+		await @homed.shutDown(defer())
+		@send { type: "bye" }
+
 # - - -
 
 process.title = 'homed'
