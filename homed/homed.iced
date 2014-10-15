@@ -7,6 +7,33 @@ path = require 'path'
 child_process = require 'child_process'
 
 class Homed
+	@Job: class Job
+		constructor: (@id, @dir, runfile) ->
+			@running = true
+			@child = child_process.spawn(
+				runfile,
+				[],
+				{
+					# See @kill
+					detached: true,
+					stdio: ['ignore', 1, 2]
+				}
+			)
+		stop: (cb) ->
+			# Fairly undocumented/unsupported: Kill the child's whole
+			# process group, we gave it one
+			console.log "Killing child id " + @id + " PID " + @child.pid
+			@running = false
+			process.kill(-@child.pid)
+			@child.on 'exit', (code, signal) ->
+				clearTimeout killTimeout
+				console.log "Child exited with code " + code + ", signal " + signal
+				cb()
+			await killTimeout = setTimeout defer(), 10000
+			console.log('hard-killing', @child.pid)
+			process.kill(-@child.pid, 'SIGKILL')
+		toJSON: () -> { id: this.id }
+
 	constructor: (@jobsDir) ->
 		events.EventEmitter.call this
 	

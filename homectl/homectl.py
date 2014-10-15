@@ -25,6 +25,9 @@ class HomedClient(object):
 		for job_id, job in self.__sendCommand({ 'command': 'list' })["jobs"].items():
 			yield job_id
 
+	def cmd_shutdown(self):
+		"Shut down homed"
+		yield self.__sendCommand({ 'command': 'shutdown' })
 
 
 def usage():
