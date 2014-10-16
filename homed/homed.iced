@@ -6,6 +6,9 @@ readline = require 'readline'
 events = require 'events'
 path = require 'path'
 child_process = require 'child_process'
+http = require 'http'
+httpProxy = require 'http-proxy'
+proxy = httpProxy.createProxyServer()
 
 # Colors!
 red   = '\u001b[31m'
@@ -27,14 +30,22 @@ class Homed
 			@started = true
 			@runningSince = new Date
 			@child = child_process.spawn(
-				runfile,
-				[],
-				{
-					# See @stop
+				runfile, [], {
 					detached: true,
-					stdio: ['ignore', 1, 2]
+					stdio: ['ignore', null, null, 'pipe']
 				}
 			)
+			@child.on 'exit', @onExit.bind(this)
+
+			controlSock = @child.stdio[3]
+			@control = readline.createInterface controlSock, controlSock
+			@control.on 'line', (line) =>
+				try
+					line = JSON.parse line
+				catch
+					return
+				@recv line
+
 		stop: (cb) ->
 			# Fairly undocumented/unsupported: Kill the child's whole
 			# process group, we gave it one
@@ -50,10 +61,16 @@ class Homed
 			console.log('hard-killing', @child.pid)
 			process.kill(-@child.pid, 'SIGKILL')
 
+		toJSON: () -> { id: this.id }
+
+		recv: (message) ->
+			for k, v of message then switch k
+				when "proxy"
+					@proxy = v
+
+
 		onExit: (code, signal) ->
 			console.log "Hey, just FYI my job exited with " + code + " " + signal
-
-		toJSON: () -> { id: this.id }
 
 	constructor: (@jobsDir) ->
 		events.EventEmitter.call this
@@ -61,6 +78,23 @@ class Homed
 	util.inherits Homed, events.EventEmitter
 
 	start: () ->
+		hostRe = /^[^.]+/
+
+		@proxyServer = http.createServer (req, res) =>
+			job = null
+			match = req.headers.host.match hostRe
+			if match
+				job = @jobs[match[0]]
+
+			if not job or not job.proxy
+				res.writeHead 404
+				res.end 'Service not found'
+				return
+
+			proxy.web req, res, { target: { port: job.proxy } }
+
+		@proxyServer.listen 4000, '127.0.0.1'
+
 		@jobs = {}
 
 		@syncJobs()
@@ -98,25 +132,6 @@ class Homed
 			return
 		@jobs[id] = job = new Job(id, dir, runfile)
 		console.log "Started " + id + " (pid " + job.child.pid + ")"
-
-
-	loadJobDirectory: (id, dir) ->
-		if id of @jobs
-			throw new Exception "Shit, already had a job named " + id
-		runfile = path.join dir, 'run'
-		await fs.exists runfile, defer(exists)
-		if not exists
-			@emit 'warning', "Job at " + dir + " doesn’t have a run file, ignoring"
-			return
-		@jobs[id] =
-			dir: dir
-			child: child = child_process.spawn(
-				runfile,
-				[],
-				{ stdio: ['ignore', 1, 2] }
-			)
-		console.log "Started " + id + " (pid " + child.pid + ")"
-
 
 	unloadJobDirectory: (jobDir) ->
 		console.log "TODO: unload the job in " + jobDir
