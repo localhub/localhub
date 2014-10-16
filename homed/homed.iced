@@ -147,6 +147,8 @@ class Homed
 			return false
 
 		for job in jobDirectories
+			stats = fs.statSync (path.join @jobsDir, job)
+			if not stats.isDirectory() then continue
 			if !(job of @jobs)
 				@loadJobDirectory job, path.join @jobsDir, job
 			delete goneJobs[job]
