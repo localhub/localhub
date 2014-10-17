@@ -80,18 +80,32 @@ class Homed
 	start: () ->
 		hostRe = /^[^.]+/
 
-		@proxyServer = http.createServer (req, res) =>
+		findJob = (req) =>
 			job = null
 			match = req.headers.host.match hostRe
 			if match
 				job = @jobs[match[0]]
 
 			if not job or not job.proxy
+				return null
+			return job
+
+		@proxyServer = http.createServer (req, res) =>
+			if job = findJob req
+				proxy.web req, res, { target: { port: job.proxy } }
+			else
 				res.writeHead 404
 				res.end 'Service not found'
 				return
 
-			proxy.web req, res, { target: { port: job.proxy } }
+		@proxyServer.on 'upgrade', (req, socket, head) =>
+			if job = findJob req
+				proxy.ws req, socket, head, {
+					target: { port: job.proxy }
+				}
+			else
+				socket.close()
+
 
 		@proxyServer.listen 4000, '127.0.0.1'
 
