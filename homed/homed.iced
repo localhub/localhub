@@ -107,7 +107,7 @@ class Homed
 				socket.close()
 
 
-		@proxyServer.listen 4000, '127.0.0.1'
+		@proxyServer.listen 4000
 
 		@jobs = {}
 
