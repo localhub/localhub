@@ -10,10 +10,6 @@ http = require 'http'
 httpProxy = require 'http-proxy'
 proxy = httpProxy.createProxyServer()
 
-# Colors!
-red   = '\u001b[31m'
-reset = '\u001b[0m'
-
 timeout = (timeout, cb) ->
 	fired = false
 	setTimeout () ->
@@ -26,11 +22,15 @@ timeout = (timeout, cb) ->
 
 class Homed
 	@Job: class Job
-		constructor: (@id, @dir, runfile) ->
-			@started = true
+		constructor: (@id, @dir) ->
+
+		start: (cb) ->
+			if @runningSince
+				cb()
+				return
 			@runningSince = new Date
 			@child = child_process.spawn(
-				runfile, [], {
+				path.join(@dir, 'run'), [], {
 					detached: true,
 					stdio: ['ignore', null, null, 'pipe']
 				}
@@ -46,28 +46,33 @@ class Homed
 					return
 				@recv line
 
-		stop: (cb) ->
-			# Fairly undocumented/unsupported: Kill the child's whole
-			# process group, we gave it one
-			console.log "Killing " + @id + " (pid " + @child.pid + ")"
-			@started = false
-			@runningSince = null
-			process.kill(-@child.pid)
-			@child.on 'exit', (code, signal) ->
-				clearTimeout killTimeout
-				console.log "Child exited with code " + code + ", signal " + signal
-				cb()
-			await killTimeout = setTimeout defer(), 10000
-			console.log('hard-killing', @child.pid)
-			process.kill(-@child.pid, 'SIGKILL')
+			console.log "Started " + @id + " (pid " + @child.pid + ")"
+			cb()
 
-		toJSON: () -> { id: this.id }
+		stop: (cb) ->
+			if not @child
+				cb()
+				return
+			pid = @child.pid
+			console.log "Stopping " + @id + " (pid " + pid + ")"
+			delete @runningSince
+			delete @control
+			@child.on 'exit', (code, signal) =>
+				clearTimeout killTimeout
+				cb()
+			delete @child
+			# Kill the child's whole process group, we gave it one with detached: true
+			process.kill(-pid)
+			await killTimeout = setTimeout defer(), 10000
+			console.log('hard-killing', pid)
+			process.kill(-pid, 'SIGKILL')
+
+		toJSON: () -> { runningSince: @runningSince }
 
 		recv: (message) ->
 			for k, v of message then switch k
 				when "proxy"
 					@proxy = v
-
 
 		onExit: (code, signal) ->
 			console.log "Hey, just FYI my job exited with " + code + " " + signal
@@ -122,6 +127,10 @@ class Homed
 		@controlServer.listen @controlPath
 		@controlServer.on 'connection', @onConnection.bind this
 
+		await
+			for id, job of @jobs
+				job.start defer()
+
 	shutDown: (cb) ->
 		if @controlServer
 			@controlServer.close()
@@ -129,6 +138,9 @@ class Homed
 		if @watcher
 			@watcher.close()
 			@watcher = null
+		if @proxyServer
+			@proxyServer.close()
+			@proxyServer = null
 		await
 			for job of @jobs
 				@jobs[job].stop defer()
@@ -139,13 +151,7 @@ class Homed
 	loadJobDirectory: (id, dir) ->
 		if id of @jobs
 			throw new Exception "Shit, already had a job named " + id
-		runfile = path.join dir, 'run'
-		await fs.exists runfile, defer(exists)
-		if not exists
-			@emit 'warning', "Job at " + dir + " doesn’t have a run file, ignoring"
-			return
-		@jobs[id] = job = new Job(id, dir, runfile)
-		console.log "Started " + id + " (pid " + job.child.pid + ")"
+		@jobs[id] = job = new Job id, dir
 
 	unloadJobDirectory: (jobDir) ->
 		console.log "TODO: unload the job in " + jobDir
@@ -197,17 +203,29 @@ class HomedClient
 		@[method] msg
 	
 	cmd_list: (msg) ->
-		@send {
-			type: "job_list",
-			"jobs": @homed.jobs
-		}
+		@send { "jobs": @homed.jobs }
 	cmd_shutdown: (msg) ->
-		@send {
-			"type": "info",
-			"message": "Shutting down…"
-		}
 		await @homed.shutDown(defer())
-		@send { type: "bye" }
+		@send { "bye": true }
+	cmd_stop: (msg) ->
+		job = @homed.jobs[msg.job]
+		if not job
+			@send { error: "No such job" }
+		await job.stop defer()
+		@send { stopped: msg.job }
+	cmd_start: (msg) ->
+		job = @homed.jobs[msg.job]
+		if not job
+			@send { error: "No such job" }
+		await job.start defer()
+		@send { started: msg.job }
+	cmd_restart: (msg) ->
+		job = @homed.jobs[msg.job]
+		if not job
+			@send { error: "No such job" }
+		await job.stop defer()
+		await job.start defer()
+		@send { restarted: msg.job }
 
 # - - -
 

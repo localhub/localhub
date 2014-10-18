@@ -17,11 +17,6 @@ class HomedClient(object):
 		self.connection.write('\n')
 		self.connection.flush()
 
-	def __until(self, message_type):
-		for message in self.recv:
-			yield message
-			if message["type"] == message_type: break
-
 	@classmethod
 	def commands(cls):
 		for name in cls.__dict__:
@@ -32,16 +27,36 @@ class HomedClient(object):
 	def cmd_list(self):
 		"List jobs"
 		self.__send({ 'command': 'list' })
-		return self.__until("job_list")
+		yield next(self.recv)
 
 	def cmd_shutdown(self):
 		"Shut down homed"
 		self.__send({ 'command': 'shutdown' })
-		return self.__until("bye")
+		yield next(self.recv)
 
 	def cmd_restart(self, job):
 		"Restart a job"
-		pass
+		self.__send({
+		    'command': 'restart',
+		    'job': job
+		})
+		yield next(self.recv)
+
+	def cmd_stop(self, job):
+		"Stop a job"
+		self.__send({
+		    'command': 'stop',
+		    'job': job
+		})
+		yield next(self.recv)
+
+	def cmd_start(self, job):
+		"Start a job"
+		self.__send({
+		    'command': 'start',
+		    'job': job
+		})
+		yield next(self.recv)
 
 def usage():
 	return (
@@ -80,4 +95,6 @@ if __name__ == "__main__":
 	if method is None:
 		print(usage(), file=sys.stderr)
 		sys.exit(1)
-	for line in method(*args): print(formatter.format(line))
+	for message in method(*args):
+		for line in formatter.format(message):
+			print(line)
