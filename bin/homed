@@ -1,4 +1,0 @@
-#!/usr/bin/env node
-
-require('../homed/node_modules/iced-coffee-script/register')
-require('../homed/homed')

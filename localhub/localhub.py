@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import socket, os, sys, json, inspect, formatter
 
-class HomedClient(object):
+class LocalhubClient(object):
 	def __init__(self):
 		sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-		sock.connect('/tmp/homed.{uid}.sock'.format(uid=os.getuid()))
+		sock.connect('/tmp/localhub.{uid}.sock'.format(uid=os.getuid()))
 		self.connection = sock.makefile('rw')
 		self.recv = self.__recv()
 
@@ -30,7 +30,7 @@ class HomedClient(object):
 		yield next(self.recv)
 
 	def cmd_shutdown(self):
-		"Shut down homed"
+		"Shut down localhub"
 		self.__send({ 'command': 'shutdown' })
 		yield next(self.recv)
 
@@ -60,19 +60,19 @@ class HomedClient(object):
 
 def usage():
 	return (
-		"usage: homectl \033[4mcommand\033[0m [\033[4marguments\033[0m...]\n"
+		"usage: localhub \033[4mcommand\033[0m [\033[4marguments\033[0m...]\n"
 		"\n"
-		"  Interface to control homed (https://github.com/Sidnicious/homed)\n"
+		"  https://github.com/localhub/localhub\n"
 		"\n"
 		"commands:\n" + "\n".join(
-			"  homectl {}{} - {}".format(
+			"  localhub {}{} - {}".format(
 				command[0],
 				(
 					(" " + " ".join("\033[4m" + arg + "\033[0m" for arg in command[2]))
 					if command[2] else ""
 				),
 				command[1]
-			) for command in HomedClient.commands()
+			) for command in LocalhubClient.commands()
 		)
 	)
 
@@ -86,9 +86,9 @@ if __name__ == "__main__":
 	command, *args = sys.argv[1:]
 
 	try:
-		client = HomedClient()
+		client = LocalhubClient()
 	except socket.error as e:
-		print("Couldn’t connect. Is homed running?", file=sys.stderr)
+		print("Couldn’t connect. Is localhubd running?", file=sys.stderr)
 		sys.exit(2)
 	
 	method = getattr(client, 'cmd_' + command, None)

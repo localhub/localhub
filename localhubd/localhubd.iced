@@ -20,7 +20,7 @@ timeout = (timeout, cb) ->
 		fired = true
 		cb.apply undefined, [false].concat arguments
 
-class Homed
+class Localhubd
 	@Job: class Job
 		constructor: (@id, @dir) ->
 
@@ -80,7 +80,7 @@ class Homed
 	constructor: (@jobsDir) ->
 		events.EventEmitter.call this
 	
-	util.inherits Homed, events.EventEmitter
+	util.inherits Localhubd, events.EventEmitter
 
 	start: () ->
 		hostRe = /^[^.]+/
@@ -119,7 +119,7 @@ class Homed
 		@syncJobs()
 		@watcher = fs.watch @jobsDir, (event, filename) => @syncJobs()
 
-		@controlPath = '/tmp/homed.' + process.getuid() + '.sock'
+		@controlPath = '/tmp/localhub.' + process.getuid() + '.sock'
 		@controlServer = new net.Server
 
 		fs.unlinkSync @controlPath if fs.existsSync @controlPath
@@ -179,10 +179,10 @@ class Homed
 
 
 	onConnection: (sock) ->
-		new HomedClient @, sock
+		new LocalhubdClient @, sock
 
-class HomedClient
-	constructor: (@homed, @sock) ->
+class LocalhubdClient
+	constructor: (@localhubd, @sock) ->
 		sock.setEncoding 'utf-8'
 		i = readline.createInterface sock, sock
 		i.on 'line', (line) =>
@@ -203,24 +203,24 @@ class HomedClient
 		@[method] msg
 	
 	cmd_list: (msg) ->
-		@send { "jobs": @homed.jobs }
+		@send { "jobs": @localhubd.jobs }
 	cmd_shutdown: (msg) ->
-		await @homed.shutDown(defer())
+		await @localhubd.shutDown(defer())
 		@send { "bye": true }
 	cmd_stop: (msg) ->
-		job = @homed.jobs[msg.job]
+		job = @localhubd.jobs[msg.job]
 		if not job
 			@send { error: "No such job" }
 		await job.stop defer()
 		@send { stopped: msg.job }
 	cmd_start: (msg) ->
-		job = @homed.jobs[msg.job]
+		job = @localhubd.jobs[msg.job]
 		if not job
 			@send { error: "No such job" }
 		await job.start defer()
 		@send { started: msg.job }
 	cmd_restart: (msg) ->
-		job = @homed.jobs[msg.job]
+		job = @localhubd.jobs[msg.job]
 		if not job
 			@send { error: "No such job" }
 		await job.stop defer()
@@ -229,25 +229,25 @@ class HomedClient
 
 # - - -
 
-process.title = 'homed'
+process.title = 'localhubd'
 args = process.argv[2..]
 if not args.length
-	process.stderr.write "usage: homed job_directory\n"
+	process.stderr.write "usage: localhubd job_directory\n"
 	process.exit -1
 
-homed = new Homed args[0]
+localhubd = new Localhubd args[0]
 
-homed.on "error", (error) ->
+localhubd.on "error", (error) ->
 	util.error error
 	process.exit 1
 
-homed.on "warning", (error) ->
+localhubd.on "warning", (error) ->
 	util.error error
 
-homed.start()
+localhubd.start()
 
 process.on 'SIGINT', () ->
 	process.exit()
 
 process.on 'exit', () ->
-	homed.shutDown()
+	localhubd.shutDown()

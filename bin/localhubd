@@ -1,0 +1,4 @@
+#!/usr/bin/env node
+
+require('../localhubd/node_modules/iced-coffee-script/register')
+require('../localhubd/localhubd')
