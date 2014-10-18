@@ -55,12 +55,9 @@ class Localhubd
 				return
 			pid = @child.pid
 			console.log "Stopping " + @id + " (pid " + pid + ")"
-			delete @runningSince
-			delete @control
 			@child.on 'exit', (code, signal) =>
 				clearTimeout killTimeout
 				cb()
-			delete @child
 			# Kill the child's whole process group, we gave it one with detached: true
 			process.kill(-pid)
 			await killTimeout = setTimeout defer(), 10000
@@ -75,6 +72,9 @@ class Localhubd
 					@proxy = v
 
 		onExit: (code, signal) ->
+			delete @runningSince
+			delete @control
+			delete @child
 			console.log "Hey, just FYI my job exited with " + code + " " + signal
 
 	constructor: (@jobsDir) ->
