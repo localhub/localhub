@@ -3,6 +3,6 @@
   "version": "0.0.1",
   "dependencies": {
     "http-proxy": "^1.5",
-    "iced-coffee-script": "^1.8"
+    "iced-coffee-script": "^1.8.0-a"
   }
 }
