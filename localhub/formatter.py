@@ -4,9 +4,6 @@ def format_jobs(message):
 def format_info(message):
 	return "\033[36m" + message + "\033[0m"
 
-def format_bye(message):
-	return "Bye!"
-
 def format_stopped(job):
 	return "{} stopped".format(job)
 

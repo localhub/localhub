@@ -29,11 +29,6 @@ class LocalhubClient(object):
 		self.__send({ 'command': 'list' })
 		yield next(self.recv)
 
-	def cmd_shutdown(self):
-		"Shut down localhub"
-		self.__send({ 'command': 'shutdown' })
-		yield next(self.recv)
-
 	def cmd_restart(self, job):
 		"Restart a job"
 		self.__send({

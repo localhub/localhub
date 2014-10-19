@@ -204,9 +204,6 @@ class LocalhubdClient
 	
 	cmd_list: (msg) ->
 		@send { "jobs": @localhubd.jobs }
-	cmd_shutdown: (msg) ->
-		await @localhubd.shutDown(defer())
-		@send { "bye": true }
 	cmd_stop: (msg) ->
 		job = @localhubd.jobs[msg.job]
 		if not job
