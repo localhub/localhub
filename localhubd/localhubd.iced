@@ -9,6 +9,8 @@ child_process = require 'child_process'
 http = require 'http'
 httpProxy = require 'http-proxy'
 proxy = httpProxy.createProxyServer()
+USER = (require 'pwuid')()
+PREFIX = path.join USER.dir, '.localhub'
 
 timeout = (timeout, cb) ->
 	fired = false
@@ -77,7 +79,7 @@ class Localhubd
 			delete @child
 			console.log "Hey, just FYI my job exited with " + code + " " + signal
 
-	constructor: (@jobsDir) ->
+	constructor: ->
 		events.EventEmitter.call this
 	
 	util.inherits Localhubd, events.EventEmitter
@@ -117,7 +119,7 @@ class Localhubd
 		@jobs = {}
 
 		@syncJobs()
-		@watcher = fs.watch @jobsDir, (event, filename) => @syncJobs()
+		@watcher = fs.watch PREFIX, (event, filename) => @syncJobs()
 
 		@controlPath = '/tmp/localhub.' + process.getuid() + '.sock'
 		@controlServer = new net.Server
@@ -161,22 +163,21 @@ class Localhubd
 		goneJobs = {}
 		goneJobs[job] = null for job in Object.keys @jobs
 		try
-			jobDirectories = fs.readdirSync @jobsDir
+			jobDirectories = fs.readdirSync PREFIX
 		catch e
 			@emit "error", e
 			return false
 
 		for job in jobDirectories
-			stats = fs.statSync (path.join @jobsDir, job)
+			stats = fs.statSync (path.join PREFIX, job)
 			if not stats.isDirectory() then continue
 			if !(job of @jobs)
-				@loadJobDirectory job, path.join @jobsDir, job
+				@loadJobDirectory job, path.join PREFIX, job
 			delete goneJobs[job]
 
-		@unloadJobDirectory path.join @jobsDir, job for job in Object.keys goneJobs
+		@unloadJobDirectory path.join PREFIX, job for job in Object.keys goneJobs
 
 		return true
-
 
 	onConnection: (sock) ->
 		new LocalhubdClient @, sock
@@ -227,12 +228,8 @@ class LocalhubdClient
 # - - -
 
 process.title = 'localhubd'
-args = process.argv[2..]
-if not args.length
-	process.stderr.write "usage: localhubd job_directory\n"
-	process.exit -1
 
-localhubd = new Localhubd args[0]
+localhubd = new Localhubd
 
 localhubd.on "error", (error) ->
 	util.error error
