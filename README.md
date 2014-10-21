@@ -2,11 +2,11 @@
 
 Localhub lets people who can't remember port numbers use lots of localhost apps.
 
-# Requirements
+## Requirements
 
 Node and Python 3.
 
-# Installation
+## Install
 
 Just read the [Dockerfile](Dockerfile) for now.
 
