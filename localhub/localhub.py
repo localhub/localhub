@@ -32,24 +32,24 @@ class LocalhubClient(object):
 	def cmd_restart(self, job):
 		"Restart a job"
 		self.__send({
-		    'command': 'restart',
-		    'job': job
+			'command': 'restart',
+			'job': job
 		})
 		yield next(self.recv)
 
 	def cmd_stop(self, job):
 		"Stop a job"
 		self.__send({
-		    'command': 'stop',
-		    'job': job
+			'command': 'stop',
+			'job': job
 		})
 		yield next(self.recv)
 
 	def cmd_start(self, job):
 		"Start a job"
 		self.__send({
-		    'command': 'start',
-		    'job': job
+			'command': 'start',
+			'job': job
 		})
 		yield next(self.recv)
 

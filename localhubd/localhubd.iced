@@ -12,6 +12,9 @@ proxy = httpProxy.createProxyServer()
 USER = (require 'pwuid')()
 PREFIX = path.join USER.dir, '.localhub'
 
+proxy.on 'error', (e) ->
+	console.log 'Proxy error:', e
+
 timeout = (timeout, cb) ->
 	fired = false
 	setTimeout () ->
@@ -34,7 +37,7 @@ class Localhubd
 			@child = child_process.spawn(
 				path.join(@dir, 'run'), [], {
 					detached: true,
-					stdio: ['ignore', null, null, 'pipe']
+					stdio: [0, 1, 2, 'pipe']
 				}
 			)
 			@child.on 'exit', @onExit.bind(this)
@@ -116,6 +119,9 @@ class Localhubd
 
 		@proxyServer.listen 4000
 
+		try
+			fs.mkdirSync PREFIX
+
 		@jobs = {}
 
 		@syncJobs()
@@ -190,8 +196,9 @@ class LocalhubdClient
 			try
 				obj = JSON.parse line
 			catch e
-				console.log "Couldn’t parse message, closing connection with this client"
-				sock.destroy()
+				console.log "Couldn’t parse message, closing connection"
+				sock.end()
+				return
 			@recv obj
 
 	send: (msg) ->
@@ -200,7 +207,10 @@ class LocalhubdClient
 
 	recv: (msg) ->
 		method = 'cmd_' + (msg.command || '')
-		if not method of @ then method = 'cmd_unknown'
+		if not (method of @)
+			console.log "Unknown command, closing connection"
+			@sock.end()
+			return
 		@[method] msg
 	
 	cmd_list: (msg) ->
@@ -209,21 +219,24 @@ class LocalhubdClient
 		job = @localhubd.jobs[msg.job]
 		if not job
 			@send { error: "No such job" }
+			return
 		await job.stop defer()
-		@send { stopped: msg.job }
+		@send { ok: true }
 	cmd_start: (msg) ->
 		job = @localhubd.jobs[msg.job]
 		if not job
 			@send { error: "No such job" }
+			return
 		await job.start defer()
-		@send { started: msg.job }
+		@send { ok: true }
 	cmd_restart: (msg) ->
 		job = @localhubd.jobs[msg.job]
 		if not job
 			@send { error: "No such job" }
+			return
 		await job.stop defer()
 		await job.start defer()
-		@send { restarted: msg.job }
+		@send { ok: true }
 
 # - - -
 

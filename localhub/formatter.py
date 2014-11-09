@@ -4,15 +4,15 @@ def format_jobs(message):
 def format_info(message):
 	return "\033[36m" + message + "\033[0m"
 
-def format_stopped(job):
-	return "{} stopped".format(job)
+def format_error(message):
+	return "\033[31m" + message + "\033[0m"
 
-def format_started(job):
-	return "{} started".format(job)
 
-def format_restarted(job):
-	return "{} restarted".format(job)
+def format_ok(_):
+	return None
 
 def format(message):
 	for k in message:
-		yield globals().get("format_" + k)(message[k])
+		s = globals().get("format_" + k)(message[k])
+		if s is not None:
+			yield s
